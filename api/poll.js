@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
-const { Polls, PollOption } = require("../database");
+const {Polls, PollOption} = require("../database");
+const {tallyIRV} = require("./irv");
 
 router.get("/", async (req, res) => {
   try {
@@ -47,6 +48,18 @@ router.get("/:id", async (req, res) => {
   } catch (err) {
     console.error("Error getting poll:", err);
     res.status(500).send({ error: "Server error" });
+  }
+});
+
+// IRV logic
+router.get("/:id/tally-irv", async (req, res) => {
+  try {
+    const winnerId = await tallyIRV(req.params.id);
+    const winner = await PollOption.findByPk(winnerId);
+    res.json({ winner });
+  } catch (err) {
+    console.error("IRV Tally Failed:", err);
+    res.status(500).json({ error: "Failed to tally IRV votes" });
   }
 });
 

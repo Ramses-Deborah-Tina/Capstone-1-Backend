@@ -1,5 +1,6 @@
 const { DataTypes } = require("sequelize");
 const db = require("./db");
+const PollOption = require("./poll_options");
 
 const Vote = db.define("vote", {
   id: {
@@ -22,5 +23,8 @@ const Vote = db.define("vote", {
     allowNull: true, 
   },
 });
+
+Vote.belongsTo(PollOption, {foreignKey: "poll_option_id"});
+PollOption.hasMany(Vote, {foreignKey: "poll_option_id"});
 
 module.exports = Vote;
