@@ -1,8 +1,10 @@
 const express = require("express");
 const router = express.Router();
+const { authMiddleware } = require("../auth/middleware");
 const { Polls } = require("../database");
 
-router.get("/", async (req, res) => {
+
+router.get("/", authMiddleware, async (req, res) => {
   try {
     const polls = await Polls.findAll();
     res.status(200).send(polls);
@@ -12,7 +14,7 @@ router.get("/", async (req, res) => {
   }
 });
 
-router.get("/:id", async (req, res) => {
+router.get("/:id", authMiddleware, async (req, res) => {
   try {
     const poll = await Polls.findByPk(req.params.id);
     if (!poll) {
@@ -25,7 +27,7 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-router.patch("/:id", async (req, res) => {
+router.patch("/:id", authMiddleware, async (req, res) => {
   try {
     const poll = await Polls.findByPk(req.params.id);
     if (!poll) {
@@ -41,7 +43,7 @@ router.patch("/:id", async (req, res) => {
 });
 
 
-router.post("/", async (req, res) => {
+router.post("/", authMiddleware, async (req, res) => {
   try {
     const createPoll = await Polls.create(req.body);
     res.status(201).send(createPoll);
@@ -51,7 +53,7 @@ router.post("/", async (req, res) => {
   }
 });
 
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", authMiddleware, async (req, res) => {
   try {
     const deletePoll = await Polls.findByPk(req.params.id);
     if (!deletePoll) {
