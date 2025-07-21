@@ -47,7 +47,7 @@ Vote.belongsTo(PollOption, {
 });
 PollOption.hasMany(Vote, {
   foreignKey: "pollOptionId",
-  as: "votes",
+  as: "optionvotes",
 });
 
 module.exports = {
