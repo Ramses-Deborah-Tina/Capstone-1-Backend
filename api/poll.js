@@ -42,6 +42,7 @@ router.get("/:id", async (req, res) => {
       status: poll.status,
       publishedAt: poll.publishedAt, // including this for clarity
       endTime: poll.endTime,
+      allowGuests: poll.allowGuests, // Want some guest-stars to participate?
       options: poll.options,
       totalVotes,
     });
@@ -93,7 +94,6 @@ router.patch("/:id", async (req, res) => {
     res.status(500).json({ error: "Failed to update poll" });
   }
 });
-
 
 
 router.post("/", async (req, res) => {
