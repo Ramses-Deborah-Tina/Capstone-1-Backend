@@ -26,6 +26,14 @@ const Polls = db.define(
       type: DataTypes.BOOLEAN,
       defaultValue: true,
     },
+    allowGuests: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+    },
+    endTime: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
     status: {
       type: DataTypes.STRING,
       allowNull: false,
