@@ -21,6 +21,10 @@ const Ballot = db.define("ballot", {
     type: DataTypes.DATE,
     defaultValue: DataTypes.NOW, 
   },
+  isDraft: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false,
+  },
 });
 
 module.exports = Ballot;

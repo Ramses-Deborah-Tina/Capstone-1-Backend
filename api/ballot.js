@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { Ballot, Vote, Polls, PollOption, User } = require("../database");
+const {Ballot, Vote, Polls, PollOption, User} = require("../database");
 
 router.post("/", async (req, res) => {
   try {
@@ -15,30 +15,41 @@ router.post("/", async (req, res) => {
       return res.status(404).json({ error: "Poll not found." });
     }
 
-    // Handle guest voting logic
-    if (!userId) {
-      if (!poll.allowGuests) {
-        return res.status(403).json({ error: "This poll does not allow guest voting." });
-      }
-    } else {
+    // Guest vote check
+    if (!userId && !poll.allowGuests) {
+      return res.status(403).json({ error: "Guest voting not allowed for this poll." });
+    }
+
+    let existingBallot = null;
+
+    if (userId) {
       const user = await User.findByPk(userId);
       if (!user) {
         return res.status(404).json({ error: "User not found." });
       }
 
-      const existingBallot = await Ballot.findOne({
+      existingBallot = await Ballot.findOne({
         where: { poll_id: pollId, user_id: userId },
       });
 
-      if (existingBallot) {
-        return res.status(400).json({ error: "User has already submitted a ballot for this poll." });
+      if (existingBallot && !existingBallot.isDraft) {
+        return res.status(400).json({ error: "You have already submitted a final ballot for this poll." });
       }
     }
 
-    const ballot = await Ballot.create({
-      poll_id: pollId,
-      user_id: userId || null,
-    });
+    let ballot;
+    if (existingBallot && existingBallot.isDraft) {
+      // Overwrite existing draft
+      ballot = existingBallot;
+      await Vote.destroy({ where: { ballot_id: ballot.id } });
+    } else {
+      // Create new ballot
+      ballot = await Ballot.create({
+        poll_id: pollId,
+        user_id: userId || null,
+        isDraft: false,
+      });
+    }
 
     await Promise.all(
       votes.map((vote, index) =>
@@ -50,7 +61,11 @@ router.post("/", async (req, res) => {
       )
     );
 
+    ballot.isDraft = false;
+    await ballot.save();
+
     res.status(201).json({ message: "Ballot submitted successfully." });
+
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Failed to submit ballot." });
