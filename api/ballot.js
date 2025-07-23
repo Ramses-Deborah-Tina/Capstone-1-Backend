@@ -11,9 +11,7 @@ router.post("/", async (req, res) => {
     }
 
     const poll = await Polls.findByPk(pollId);
-    if (!poll) {
-      return res.status(404).json({ error: "Poll not found." });
-    }
+    if (!poll) return res.status(404).json({ error: "Poll not found." });
 
     // Handle guest voting logic
     if (!userId) {
@@ -22,9 +20,7 @@ router.post("/", async (req, res) => {
       }
     } else {
       const user = await User.findByPk(userId);
-      if (!user) {
-        return res.status(404).json({ error: "User not found." });
-      }
+      if (!user) return res.status(404).json({ error: "User not found." });
 
       const existingBallot = await Ballot.findOne({
         where: { poll_id: pollId, user_id: userId },
@@ -35,16 +31,31 @@ router.post("/", async (req, res) => {
       }
     }
 
+    // 🔍 Validation logic
+    const validOptions = await PollOption.findAll({ where: { pollId } });
+    const validOptionIds = new Set(validOptions.map((opt) => opt.id));
+
+    const seen = new Set();
+    for (const voteId of votes) {
+      if (!validOptionIds.has(voteId)) {
+        return res.status(400).json({ error: `Invalid option ID: ${voteId}` });
+      }
+      if (seen.has(voteId)) {
+        return res.status(400).json({ error: "Duplicate vote options are not allowed." });
+      }
+      seen.add(voteId);
+    }
+
     const ballot = await Ballot.create({
       poll_id: pollId,
       user_id: userId || null,
     });
 
     await Promise.all(
-      votes.map((vote, index) =>
+      votes.map((voteId, index) =>
         Vote.create({
           ballot_id: ballot.id,
-          poll_option_id: vote,
+          poll_option_id: voteId,
           rank: index + 1,
         })
       )
