@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const { Ballot } = require("../database");
-const { authMiddleware } = require("../auth/middleware");
+const authMiddleware = require("../auth/middleware");
 
 router.post("/", authMiddleware, async (req, res) => {
   try {

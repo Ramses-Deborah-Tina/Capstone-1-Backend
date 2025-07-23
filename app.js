@@ -6,7 +6,7 @@ const jwt = require("jsonwebtoken");
 const cookieParser = require("cookie-parser");
 const app = express();
 const apiRouter = require("./api");
-const { router: authRouter } = require("./auth");
+const authRouter = require("./auth");
 const { db } = require("./database");
 const cors = require("cors");
 
