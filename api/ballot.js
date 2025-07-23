@@ -31,7 +31,7 @@ router.post("/", async (req, res) => {
       }
     }
 
-    // 🔍 Validation logic
+    // Validation logic
     const validOptions = await PollOption.findAll({ where: { pollId } });
     const validOptionIds = new Set(validOptions.map((opt) => opt.id));
 
