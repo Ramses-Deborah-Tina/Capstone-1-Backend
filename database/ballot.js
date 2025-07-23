@@ -19,6 +19,8 @@ const Ballot = db.define("ballot", {
   },
   submitted_at: {
     type: DataTypes.DATE,
-    defaultValue: "", // I'm not sure what to put for this yet
+    defaultValue: DataTypes.NOW, 
   },
 });
+
+module.exports = Ballot;

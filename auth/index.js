@@ -1,6 +1,7 @@
 const express = require("express");
 const { User } = require("../database");
-const { generateToken } = require("./jwt");
+const { generateToken, verifyToken } = require("./jwt");
+const authenticateJWT = require("../auth/middleware");
 
 const router = express.Router();
 
@@ -102,8 +103,9 @@ router.post("/login", async (req, res) => {
       return res.status(400).send({ error: "Username and password are required" });
 
     const user = await User.findOne({ where: { username } });
-    if (!user || !user.checkPassword(password))
+    if (!user || !user.checkPassword(password)) {
       return res.status(401).send({ error: "Invalid credentials" });
+    }
 
     const token = generateToken(user);
 
@@ -130,13 +132,12 @@ router.post("/logout", (req, res) => {
   res.send({ message: "Logout successful" });
 });
 
-// Get current user
+// Get current user info (from token)
 router.get("/me", (req, res) => {
   const token = req.cookies.token;
   if (!token) return res.send({});
 
   try {
-    const { verifyToken } = require("./jwt");
     const user = verifyToken(token);
     res.send({ user });
   } catch {
@@ -144,4 +145,37 @@ router.get("/me", (req, res) => {
   }
 });
 
+// Update user profile (protected)
+router.put("/me", authenticateJWT, async (req, res) => {
+  try {
+    const { firstName, lastName, email, profilePicture } = req.body;
+    const user = await User.findByPk(req.user.id);
+
+    if (!user) return res.status(404).send({ error: "User not found" });
+
+    if (firstName !== undefined) user.firstName = firstName;
+    if (lastName !== undefined) user.lastName = lastName;
+    if (email !== undefined) user.email = email;
+    if (profilePicture !== undefined) user.profilePicture = profilePicture;
+
+    await user.save();
+
+    res.send({
+      message: "Profile updated successfully",
+      user: {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        profilePicture: user.profilePicture,
+      },
+    });
+  } catch (err) {
+    console.error("Update profile error:", err);
+    res.status(500).send({ error: "Failed to update profile" });
+  }
+});
+
 module.exports = router;
+
