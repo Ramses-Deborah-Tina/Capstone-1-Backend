@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { Ballot, Vote, Polls, PollOption, User } = require("../database");
+const {Ballot, Vote, Polls, PollOption, User} = require("../database");
 
 router.post("/", async (req, res) => {
   try {
@@ -11,57 +11,61 @@ router.post("/", async (req, res) => {
     }
 
     const poll = await Polls.findByPk(pollId);
-    if (!poll) return res.status(404).json({ error: "Poll not found." });
+    if (!poll) {
+      return res.status(404).json({ error: "Poll not found." });
+    }
 
-    // Handle guest voting logic
-    if (!userId) {
-      if (!poll.allowGuests) {
-        return res.status(403).json({ error: "This poll does not allow guest voting." });
-      }
-    } else {
+    // Guest vote check
+    if (!userId && !poll.allowGuests) {
+      return res.status(403).json({ error: "Guest voting not allowed for this poll." });
+    }
+
+    let existingBallot = null;
+
+    if (userId) {
       const user = await User.findByPk(userId);
-      if (!user) return res.status(404).json({ error: "User not found." });
+      if (!user) {
+        return res.status(404).json({ error: "User not found." });
+      }
 
-      const existingBallot = await Ballot.findOne({
+      existingBallot = await Ballot.findOne({
         where: { poll_id: pollId, user_id: userId },
       });
 
-      if (existingBallot) {
-        return res.status(400).json({ error: "User has already submitted a ballot for this poll." });
+      if (existingBallot && !existingBallot.isDraft) {
+        return res.status(400).json({ error: "You have already submitted a final ballot for this poll." });
       }
     }
 
-    // Validation logic
-    const validOptions = await PollOption.findAll({ where: { pollId } });
-    const validOptionIds = new Set(validOptions.map((opt) => opt.id));
-
-    const seen = new Set();
-    for (const voteId of votes) {
-      if (!validOptionIds.has(voteId)) {
-        return res.status(400).json({ error: `Invalid option ID: ${voteId}` });
-      }
-      if (seen.has(voteId)) {
-        return res.status(400).json({ error: "Duplicate vote options are not allowed." });
-      }
-      seen.add(voteId);
+    let ballot;
+    if (existingBallot && existingBallot.isDraft) {
+      // Overwrite existing draft
+      ballot = existingBallot;
+      await Vote.destroy({ where: { ballot_id: ballot.id } });
+    } else {
+      // Create new ballot
+      ballot = await Ballot.create({
+        poll_id: pollId,
+        user_id: userId || null,
+        isDraft: false,
+      });
     }
-
-    const ballot = await Ballot.create({
-      poll_id: pollId,
-      user_id: userId || null,
-    });
 
     await Promise.all(
-      votes.map((voteId, index) =>
+      votes.map((vote, index) =>
         Vote.create({
           ballot_id: ballot.id,
-          poll_option_id: voteId,
+          poll_option_id: vote,
           rank: index + 1,
         })
       )
     );
 
+    ballot.isDraft = false;
+    await ballot.save();
+
     res.status(201).json({ message: "Ballot submitted successfully." });
+
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Failed to submit ballot." });
