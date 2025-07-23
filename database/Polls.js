@@ -22,6 +22,14 @@ const Polls = db.define(
       type: DataTypes.TEXT,
       allowNull: false,
     },
+    hasVoted: {
+      type: DataTypes.ARRAY(DataTypes.STRING),
+      defaultValue: [],
+    },
+    votes: {
+      type: DataTypes.JSONB,
+      defaultValue: {},
+    },
     isActive: {
       type: DataTypes.BOOLEAN,
       defaultValue: true,

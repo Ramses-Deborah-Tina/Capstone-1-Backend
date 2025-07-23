@@ -5,10 +5,9 @@ const PollOption = require("./poll_options");
 const Vote = require("./vote");
 const Ballot = require("./ballot");
 
-//Bidirectional relationship logic
 // USER ↔ POLLS
-Polls.belongsTo(User, { foreignKey: "user_id" });
 User.hasMany(Polls, { foreignKey: "user_id" });
+Polls.belongsTo(User, { foreignKey: "user_id" });
 
 // POLLS ↔ OPTIONS
 Polls.hasMany(PollOption, {
@@ -31,16 +30,19 @@ Vote.belongsTo(Ballot, {
   as: "ballot",
 });
 
+// BALLOT ↔ POLLS
 Ballot.belongsTo(Polls, {
   foreignKey: "poll_id",
   as: "poll",
 });
 
+// BALLOT ↔ USER
 Ballot.belongsTo(User, {
   foreignKey: "user_id",
   as: "user",
 });
 
+// VOTE ↔ POLLOPTION
 Vote.belongsTo(PollOption, {
   foreignKey: "pollOptionId",
   as: "option",
@@ -58,3 +60,4 @@ module.exports = {
   Ballot,
   Vote,
 };
+

@@ -7,7 +7,7 @@ const usersRouter = require("./user");
 const pollsRouter = require("./poll");
 
 router.use("/Polls", pollsRouter);
-router.use("/ballots", ballotsRouter); 
+router.use("/ballots", ballotsRouter);
 router.use("/users", usersRouter);
 router.use("/test-db", testDbRouter);
 
