@@ -1,12 +1,9 @@
 const express = require("express");
 const router = express.Router();
+const {Polls, PollOption} = require("../database");
+const {tallyIRV} = require("./irv");
 
-const authMiddleware = require("../auth/middleware");
-const { Polls, PollOption } = require("../database");
-const { tallyIRV } = require("./irv");
-
-// Get all polls (protected)
-router.get("/", authMiddleware, async (req, res) => {
+router.get("/", async (req, res) => {
   try {
     const polls = await Polls.findAll();
     res.status(200).send(polls);
@@ -16,7 +13,7 @@ router.get("/", authMiddleware, async (req, res) => {
   }
 });
 
-// Get a single poll by ID (public)
+// Adjusted poll id logic to include options, more info and vote count
 router.get("/:id", async (req, res) => {
   try {
     const poll = await Polls.findByPk(req.params.id, {
@@ -25,11 +22,16 @@ router.get("/:id", async (req, res) => {
 
     if (!poll) return res.status(404).send({ error: "Poll not found" });
 
+    // Checking if the poll should transition to "ended"
     const now = new Date();
     if (poll.status === "published" && poll.endTime && new Date(poll.endTime) <= now) {
       poll.status = "ended";
       await poll.save();
     }
+
+    //issue in creating the options from the polls themselves, do it as a separate functions in the router.post
+    // for options and not just for polls
+    
 
     const totalVotes = poll.options.reduce((sum, opt) => sum + (opt.votes || 0), 0);
 
@@ -38,9 +40,9 @@ router.get("/:id", async (req, res) => {
       title: poll.title,
       description: poll.description,
       status: poll.status,
-      publishedAt: poll.publishedAt,
+      publishedAt: poll.publishedAt, // including this for clarity
       endTime: poll.endTime,
-      allowGuests: poll.allowGuests,
+      allowGuests: poll.allowGuests, // Want some guest-stars to participate?
       options: poll.options,
       totalVotes,
     });
@@ -50,7 +52,7 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-// IRV Tally route
+// IRV logic
 router.get("/:id/tally-irv", async (req, res) => {
   try {
     const winnerId = await tallyIRV(req.params.id);
@@ -62,17 +64,61 @@ router.get("/:id/tally-irv", async (req, res) => {
   }
 });
 
-// Update a poll (protected)
-router.patch("/:id", authMiddleware, async (req, res) => {
+
+// GET /polls/:id/results - Return full results for poll
+router.get("/:id/results", async (req, res) => {
   try {
-    const poll = await Polls.findByPk(req.params.id);
+    const poll = await Polls.findByPk(req.params.id, {
+      include: [{
+        model: PollOption,
+        as: "options",
+        include: [{
+          model: Vote,
+          as: "optionvotes"
+        }]
+      }]
+    });
 
     if (!poll) return res.status(404).json({ error: "Poll not found" });
 
+    const resultData = {
+      id: poll.id,
+      title: poll.title,
+      description: poll.description,
+      status: poll.status,
+      totalVotes: poll.options.reduce(
+        (sum, opt) => sum + opt.optionvotes.length,
+        0
+      ),
+      options: poll.options.map(opt => ({
+        id: opt.id,
+        text: opt.text,
+        votes: opt.optionvotes.length
+      }))
+    };
+
+    res.json(resultData);
+  } catch (err) {
+    console.error("Error getting poll results:", err);
+    res.status(500).json({ error: "Server error fetching results" });
+  }
+});
+
+
+router.patch("/:id", async (req, res) => {
+  try {
+    const poll = await Polls.findByPk(req.params.id);
+
+    if (!poll) {
+      return res.status(404).json({ error: "Poll not found" });
+    }
+
+    // Stop users from editing a poll after it's been published or ended
     if (["published", "ended"].includes(poll.status)) {
       return res.status(400).json({ error: "Cannot edit a published or ended poll" });
     }
 
+    // Included validation fields
     const { title, description } = req.body;
     if (title !== undefined && !title.trim()) {
       return res.status(400).json({ error: "Title cannot be empty" });
@@ -89,8 +135,8 @@ router.patch("/:id", authMiddleware, async (req, res) => {
   }
 });
 
-// Create new poll (protected)
-router.post("/", authMiddleware, async (req, res) => {
+
+router.post("/", async (req, res) => {
   try {
     const createPoll = await Polls.create(req.body);
     res.status(201).send(createPoll);
@@ -100,28 +146,7 @@ router.post("/", authMiddleware, async (req, res) => {
   }
 });
 
-// Delete a poll (protected)
-router.delete("/:id", authMiddleware, async (req, res) => {
-  try {
-    const deletePoll = await Polls.findByPk(req.params.id);
-
-    if (!deletePoll) {
-      return res.status(404).json({ error: "Poll not found" });
-    }
-
-    if (["published", "ended"].includes(deletePoll.status)) {
-      return res.status(400).json({ error: "Cannot delete a published or ended poll" });
-    }
-
-    await deletePoll.destroy();
-    res.sendStatus(200);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Failed to delete poll" });
-  }
-});
-
-// Duplicate poll with options
+// Duplication logic
 router.post("/:id/duplicate", async (req, res) => {
   try {
     const originalPoll = await Polls.findByPk(req.params.id, {
@@ -131,7 +156,7 @@ router.post("/:id/duplicate", async (req, res) => {
     if (!originalPoll) return res.status(404).json({ error: "Poll not found" });
 
     const duplicatedPoll = await Polls.create({
-      user_id: originalPoll.user_id,
+      user_id: originalPoll.user_id, // or req.user.id if we're using auth
       title: originalPoll.title + " (Copy)",
       description: originalPoll.description,
       status: "draft",
@@ -158,25 +183,28 @@ router.post("/:id/duplicate", async (req, res) => {
   }
 });
 
-// Add option to poll
 router.post("/:id/options", async (req, res) => {
   try {
     const { id: pollId } = req.params;
     const { text } = req.body;
 
+    // Validate text
     if (!text || !text.trim()) {
       return res.status(400).json({ error: "Option text is required." });
     }
 
+    // Check that poll exists
     const poll = await Polls.findByPk(pollId);
     if (!poll) {
       return res.status(404).json({ error: "Poll not found." });
     }
 
+    // Check that poll is in draft state
     if (poll.status !== "draft") {
       return res.status(400).json({ error: "Cannot add options to a published or ended poll." });
     }
 
+    // Create the option
     const newOption = await PollOption.create({
       text,
       pollId: poll.id,
@@ -192,7 +220,8 @@ router.post("/:id/options", async (req, res) => {
   }
 });
 
-// Publish poll
+
+// Publishing logic and validation added
 router.put("/publish/:id", async (req, res) => {
   try {
     const poll = await Polls.findByPk(req.params.id, {
@@ -211,7 +240,7 @@ router.put("/publish/:id", async (req, res) => {
     }
 
     poll.status = "published";
-    poll.publishedAt = new Date();
+    poll.publishedAt = new Date(); 
     await poll.save();
 
     res.send({ message: "Poll published successfully", poll });
@@ -221,7 +250,7 @@ router.put("/publish/:id", async (req, res) => {
   }
 });
 
-// Manually end poll
+// Manually close the polls
 router.put("/:id/end", async (req, res) => {
   try {
     const poll = await Polls.findByPk(req.params.id);
@@ -241,5 +270,26 @@ router.put("/:id/end", async (req, res) => {
   }
 });
 
-module.exports = router;
 
+router.delete("/:id", async (req, res) => {
+  try {
+    const deletePoll = await Polls.findByPk(req.params.id);
+
+    if (!deletePoll) {
+      return res.status(404).json({ error: "Poll not found" });
+    }
+
+    // Protects against polls getting deleted once published
+    if (["published", "ended"].includes(deletePoll.status)) {
+      return res.status(400).json({ error: "Cannot delete a published or ended poll" });
+    }
+
+    await deletePoll.destroy();
+    res.sendStatus(200);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Failed to delete poll" });
+  }
+});
+
+module.exports = router;
