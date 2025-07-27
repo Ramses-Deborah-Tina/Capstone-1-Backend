@@ -9,6 +9,7 @@ const apiRouter = require("./api");
 const { router: authRouter } = require("./auth");
 const { db } = require("./database");
 const cors = require("cors");
+const adminRoutes = require('./api/admin');
 
 const PORT = process.env.PORT || 8080;
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
@@ -35,6 +36,7 @@ app.use("/api", apiRouter); // mount api router
 app.use("/auth", authRouter); // mount auth router
 app.use("/polls", pollRoutes); // Added poll routes
 app.use("/api/ballots", ballotRoutes); // Added ballot routes
+app.use('/api/admin', adminRoutes); // Added admin routes
 
 // error handling middleware
 app.use((err, req, res, next) => {
