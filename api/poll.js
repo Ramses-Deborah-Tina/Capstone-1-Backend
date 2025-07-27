@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 
 const authMiddleware = require("../auth/middleware");
-const { Polls, PollOption } = require("../database");
+const { Polls, PollOption, Vote } = require("../database");
 const { tallyIRV } = require("./irv");
 
 // Get all polls (protected)
@@ -59,6 +59,45 @@ router.get("/:id/tally-irv", async (req, res) => {
   } catch (err) {
     console.error("IRV Tally Failed:", err);
     res.status(500).json({ error: "Failed to tally IRV votes" });
+  }
+});
+
+// GET /polls/:id/results - Return full results for poll (protected)
+router.get("/:id/results", authMiddleware, async (req, res) => {
+  try {
+    const poll = await Polls.findByPk(req.params.id, {
+      include: [{
+        model: PollOption,
+        as: "options",
+        include: [{
+          model: Vote,
+          as: "optionvotes"
+        }]
+      }]
+    });
+
+    if (!poll) return res.status(404).json({ error: "Poll not found" });
+
+    const resultData = {
+      id: poll.id,
+      title: poll.title,
+      description: poll.description,
+      status: poll.status,
+      totalVotes: poll.options.reduce(
+        (sum, opt) => sum + opt.optionvotes.length,
+        0
+      ),
+      options: poll.options.map(opt => ({
+        id: opt.id,
+        text: opt.text,
+        votes: opt.optionvotes.length
+      }))
+    };
+
+    res.json(resultData);
+  } catch (err) {
+    console.error("Error getting poll results:", err);
+    res.status(500).json({ error: "Server error fetching results" });
   }
 });
 
